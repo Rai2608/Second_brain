@@ -6,7 +6,7 @@ import {
   Plus, Info, Terminal, ExternalLink, HardDrive, LogOut, Send, MessageCircle
 } from 'lucide-react';
 import './App.css';
-import { supabase, isMockAuth } from './supabaseClient';
+import { supabase } from './supabaseClient';
 
 // ==========================================
 // Interfaces and Types
@@ -277,7 +277,7 @@ function App() {
     setAuthLoading(true);
 
     try {
-      const { data, error } = await supabase.auth.signUp({
+      const { error } = await supabase.auth.signUp({
         email: authEmail,
         password: authPassword,
         options: {
@@ -611,7 +611,6 @@ function App() {
       setSearchSources(sourcesList);
       setSearchConfidence(confidenceScore);
       setSearchRelatedTasks(related);
-      TypewriterIndex(0); // Trigger typing effect if desired, but we can display normally
     }, 1800);
   };
 
