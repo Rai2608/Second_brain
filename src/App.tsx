@@ -3,9 +3,10 @@ import {
   Brain, Search, Calendar, FileText, CheckSquare, 
   Network, AlertCircle, RefreshCw, Mail, MessageSquare, ArrowRight,
   Database, User, Clock, Check, X, Users, Briefcase, ChevronRight,
-  Plus, Info, Terminal, ExternalLink, HardDrive
+  Plus, Info, Terminal, ExternalLink, HardDrive, LogOut, Send, MessageCircle
 } from 'lucide-react';
 import './App.css';
+import { supabase, isMockAuth } from './supabaseClient';
 
 // ==========================================
 // Interfaces and Types
@@ -180,6 +181,34 @@ function App() {
   const [nodeCategoryFilter, setNodeCategoryFilter] = useState<string>('all');
   const [graphSearchQuery, setGraphSearchQuery] = useState<string>('');
 
+  // ==========================================
+  // Corporate Supabase Auth & Presence States
+  // ==========================================
+  const [session, setSession] = useState<any>(null);
+  const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signin');
+  const [authEmail, setAuthEmail] = useState('');
+  const [authPassword, setAuthPassword] = useState('');
+  const [authName, setAuthName] = useState('');
+  const [authLoading, setAuthLoading] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
+
+  // Email Inbox Auditing Simulation
+  const [isAuditingInbox, setIsAuditingInbox] = useState(false);
+  const [auditProgress, setAuditProgress] = useState(0);
+  const [auditLog, setAuditLog] = useState('');
+
+  // Presence Status & Auto-Reply Config
+  const [presenceStatus, setPresenceStatus] = useState<'Active' | 'Busy' | 'On Leave'>('Active');
+  const [autoReplyMessage, setAutoReplyMessage] = useState('I am currently deep in focus mode and will review my inbox later. [Synapse Cortex AI Auto-Response]');
+  const [isEditingAutoReply, setIsEditingAutoReply] = useState(false);
+
+  // Simulated Chat Interface States
+  const [chatMessages, setChatMessages] = useState<any[]>([
+    { id: '1', sender: 'Sarah Lin', text: 'Hey Paramita! Can you look over the Product Onboarding Spec today?', time: '11:45 AM', type: 'incoming' }
+  ]);
+  const [chatInput, setChatInput] = useState('');
+  const [isSimulatingMessage, setIsSimulatingMessage] = useState(false);
+
   // Search Engine States
   const [searchQuery, setSearchQuery] = useState('');
   const [searchAnswer, setSearchAnswer] = useState<string | null>(null);
@@ -209,9 +238,167 @@ function App() {
   const mousePosRef = useRef({ x: 0, y: 0 });
   const hoverNodeRef = useRef<GraphNode | null>(null);
 
-  // ==========================================
+  // Check auth session on startup
+  useEffect(() => {
+    const fetchSession = async () => {
+      const { data: { session: activeSession } } = await supabase.auth.getSession();
+      setSession(activeSession);
+    };
+    fetchSession();
+  }, []);
+
+  const handleSignIn = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAuthError(null);
+    setAuthLoading(true);
+
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: authEmail,
+        password: authPassword
+      });
+
+      if (error) {
+        setAuthError(error.message);
+      } else {
+        setSession(data.session);
+        triggerInboxAudit(authEmail);
+      }
+    } catch (err: any) {
+      setAuthError(err.message || 'An unexpected error occurred during corporate sign-in.');
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  const handleSignUp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAuthError(null);
+    setAuthLoading(true);
+
+    try {
+      const { data, error } = await supabase.auth.signUp({
+        email: authEmail,
+        password: authPassword,
+        options: {
+          data: {
+            name: authName || authEmail.split('@')[0]
+          }
+        }
+      });
+
+      if (error) {
+        setAuthError(error.message);
+      } else {
+        triggerToast('Corporate registration success! You can now sign in.');
+        setAuthMode('signin');
+        setAuthPassword('');
+      }
+    } catch (err: any) {
+      setAuthError(err.message || 'An unexpected error occurred during signup.');
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
+    setSession(null);
+    setAuthEmail('');
+    setAuthPassword('');
+    setAuthName('');
+    setAuthError(null);
+    triggerToast('Securely signed out of corporate Synapse workspace.');
+  };
+
+  const triggerInboxAudit = (email: string) => {
+    setIsAuditingInbox(true);
+    setAuditProgress(10);
+    setAuditLog('Connecting to corporate secure SMTP/IMAP servers...');
+
+    setTimeout(() => {
+      setAuditProgress(35);
+      setAuditLog('Fetching folders... Scanning CC lists for collaboration structures...');
+    }, 1000);
+
+    setTimeout(() => {
+      setAuditProgress(65);
+      setAuditLog('Found 14 relevant CC emails. Indexing action logs to Cortex semantic DB...');
+    }, 2000);
+
+    setTimeout(() => {
+      setAuditProgress(90);
+      setAuditLog('Syncing extracted actionables and mapping new relationships on canvas...');
+    }, 3000);
+
+    setTimeout(() => {
+      setAuditProgress(100);
+      setIsAuditingInbox(false);
+      triggerToast(`Audit complete! Mapped corporate emails for ${email}`);
+    }, 4000);
+  };
+
+  const triggerIncomingMessageSimulation = () => {
+    if (isSimulatingMessage) return;
+    setIsSimulatingMessage(true);
+
+    const senders = ['Sarah Lin', 'Alex Rivera', 'Jessica Chen'];
+    const sender = senders[Math.floor(Math.random() * senders.length)];
+    const messages = [
+      'Hey, are you finished reviewing the security specs?',
+      'Quick question regarding the database migration strategy.',
+      'Did you see the latest feedback on Drive for feedback spec v2?',
+      'Are you busy? Can we do a brief sync on Slack?'
+    ];
+    const text = messages[Math.floor(Math.random() * messages.length)];
+
+    setTimeout(() => {
+      const incomingMsg = {
+        id: 'msg_' + Date.now(),
+        sender,
+        text,
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        type: 'incoming'
+      };
+
+      setChatMessages(prev => [...prev, incomingMsg]);
+      triggerToast(`New incoming workspace chat from ${sender}`);
+
+      if (presenceStatus === 'Busy' || presenceStatus === 'On Leave') {
+        setTimeout(() => {
+          const autoReply = {
+            id: 'reply_' + Date.now(),
+            sender: 'Cortex Auto-Agent',
+            text: autoReplyMessage,
+            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            type: 'outgoing',
+            isAutoReply: true
+          };
+          setChatMessages(prev => [...prev, autoReply]);
+          triggerToast(`Cortex auto-replied to ${sender}`);
+        }, 1500);
+      }
+      setIsSimulatingMessage(false);
+    }, 1200);
+  };
+
+  const handleSendManualChat = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!chatInput.trim()) return;
+
+    const userMsg = {
+      id: 'msg_' + Date.now(),
+      sender: session?.user?.name || 'You',
+      text: chatInput,
+      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      type: 'outgoing'
+    };
+
+    setChatMessages(prev => [...prev, userMsg]);
+    setChatInput('');
+  };
+
   // Helper: Trigger Toast Notification
-  // ==========================================
   const triggerToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => {
@@ -901,6 +1088,229 @@ function App() {
   const countPendingTasks = () => tasks.filter(t => t.status === 'Pending').length;
   const countConnectedSources = () => Object.values(integrations).filter(Boolean).length;
 
+  // ==========================================
+  // RENDER LOGIN / SIGNUP PAGE (SUPABASE AUTH)
+  // ==========================================
+  if (!session) {
+    return (
+      <div id="app-container" style={{
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
+        height: '100vh',
+        background: 'radial-gradient(circle at top right, rgba(99, 102, 241, 0.15), rgba(15, 23, 42, 0) 50%), #030712',
+        padding: '20px'
+      }}>
+        {toastMessage && (
+          <div style={{
+            position: 'fixed',
+            bottom: '24px',
+            right: '24px',
+            background: 'rgba(15, 18, 28, 0.95)',
+            border: '1px solid var(--color-primary)',
+            boxShadow: '0 8px 32px rgba(99, 102, 241, 0.4)',
+            borderRadius: '12px',
+            padding: '16px 20px',
+            zIndex: 1000,
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px',
+            animation: 'slideUp 0.3s ease-out forwards',
+            maxWidth: '380px'
+          }}>
+            <Brain size={16} color="var(--color-primary)" />
+            <p style={{ fontSize: '0.8rem', color: '#94a3b8' }}>{toastMessage}</p>
+          </div>
+        )}
+
+        <div className="glass-panel" style={{
+          width: '100%',
+          maxWidth: '440px',
+          padding: '40px',
+          borderRadius: '16px',
+          border: '1px solid rgba(255, 255, 255, 0.08)',
+          boxShadow: '0 20px 40px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.05)',
+          background: 'rgba(10, 12, 22, 0.75)',
+          backdropFilter: 'blur(16px)',
+          animation: 'scaleUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards'
+        }}>
+          <div style={{ textAlign: 'center', marginBottom: '32px' }}>
+            <div className="logo-icon-container" style={{ margin: '0 auto 16px', width: '52px', height: '52px' }}>
+              <Brain size={28} />
+            </div>
+            <h1 style={{ fontSize: '1.8rem', fontWeight: 800, letterSpacing: '0.05em', fontFamily: 'var(--font-heading)' }}>SYNAPSE</h1>
+            <p style={{ fontSize: '0.75rem', color: 'var(--color-primary)', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', marginTop: '4px' }}>
+              Enterprise Cognitive Overlay
+            </p>
+            <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: '8px' }}>
+              Secure sign-in for authorized corporate & research institute members.
+            </p>
+          </div>
+
+          <form onSubmit={authMode === 'signin' ? handleSignIn : handleSignUp} style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
+            {authMode === 'signup' && (
+              <div>
+                <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>Full Name</label>
+                <input 
+                  type="text" 
+                  className="search-input" 
+                  placeholder="Enter your official name"
+                  value={authName}
+                  onChange={(e) => setAuthName(e.target.value)}
+                  style={{ width: '100%', fontSize: '0.85rem', padding: '12px 14px' }}
+                />
+              </div>
+            )}
+
+            <div>
+              <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>Corporate / Institute Email</label>
+              <input 
+                type="email" 
+                className="search-input" 
+                placeholder="name@synapse.corp"
+                value={authEmail}
+                onChange={(e) => setAuthEmail(e.target.value)}
+                style={{ width: '100%', fontSize: '0.85rem', padding: '12px 14px' }}
+                required
+              />
+              <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', display: 'block', marginTop: '4px' }}>
+                * Restricted to: @synapse.corp, @synapse.edu, @mit.edu, @stanford.edu
+              </span>
+            </div>
+
+            <div>
+              <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>Password</label>
+              <input 
+                type="password" 
+                className="search-input" 
+                placeholder="••••••••"
+                value={authPassword}
+                onChange={(e) => setAuthPassword(e.target.value)}
+                style={{ width: '100%', fontSize: '0.85rem', padding: '12px 14px' }}
+                required
+              />
+            </div>
+
+            {authError && (
+              <div className="glass-panel" style={{
+                padding: '10px 14px',
+                border: '1px solid rgba(244, 63, 94, 0.3)',
+                background: 'rgba(244, 63, 94, 0.05)',
+                borderRadius: '8px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                color: 'var(--color-error)',
+                fontSize: '0.75rem'
+              }}>
+                <AlertCircle size={14} style={{ flexShrink: 0 }} />
+                <span>{authError}</span>
+              </div>
+            )}
+
+            <button type="submit" className="btn btn-cyber" style={{ width: '100%', padding: '12px', fontWeight: 700, fontSize: '0.85rem', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px' }} disabled={authLoading}>
+              {authLoading ? (
+                <RefreshCw className="animate-spin" size={16} />
+              ) : authMode === 'signin' ? (
+                'Sign In & Scan Inbox'
+              ) : (
+                'Register Device'
+              )}
+            </button>
+          </form>
+
+          <div style={{ textAlign: 'center', marginTop: '24px', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '16px' }}>
+            {authMode === 'signin' ? (
+              <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                First time synching this terminal?{' '}
+                <button onClick={() => { setAuthMode('signup'); setAuthError(null); }} style={{ background: 'none', border: 'none', color: 'var(--color-primary)', fontWeight: 600, cursor: 'pointer', padding: 0 }}>
+                  Register Official Account
+                </button>
+              </p>
+            ) : (
+              <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                Already have an official account?{' '}
+                <button onClick={() => { setAuthMode('signin'); setAuthError(null); }} style={{ background: 'none', border: 'none', color: 'var(--color-primary)', fontWeight: 600, cursor: 'pointer', padding: 0 }}>
+                  Sign In
+                </button>
+              </p>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ==========================================
+  // RENDER EMAIL INBOX & CC SCAN PROGRESS WINDOW
+  // ==========================================
+  if (isAuditingInbox) {
+    return (
+      <div id="app-container" style={{
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'center',
+        alignItems: 'center',
+        height: '100vh',
+        background: '#030712',
+        padding: '40px',
+        textAlign: 'center'
+      }}>
+        <div className="logo-icon-container animate-pulse" style={{ width: '64px', height: '64px', marginBottom: '24px' }}>
+          <Brain size={32} />
+        </div>
+        
+        <h2 style={{ fontSize: '1.5rem', fontWeight: 800, fontFamily: 'var(--font-heading)', marginBottom: '8px' }}>
+          Cortex Mailbox & CC Sync Active
+        </h2>
+        
+        <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', maxWidth: '450px', marginBottom: '32px' }}>
+          Scanning your official corporate inbox for direct deliverables and coordination threads where you are carbon-copied (CC'd).
+        </p>
+
+        {/* Progress Bar Container */}
+        <div style={{
+          width: '100%',
+          maxWidth: '500px',
+          height: '6px',
+          background: 'rgba(255, 255, 255, 0.05)',
+          borderRadius: '99px',
+          overflow: 'hidden',
+          marginBottom: '20px',
+          border: '1px solid rgba(255, 255, 255, 0.03)'
+        }}>
+          <div style={{
+            width: `${auditProgress}%`,
+            height: '100%',
+            background: 'linear-gradient(90deg, var(--color-primary), var(--color-cyber))',
+            borderRadius: '99px',
+            transition: 'width 0.4s ease'
+          }} />
+        </div>
+
+        {/* Real-time scanning logger */}
+        <div className="glass-panel" style={{
+          width: '100%',
+          maxWidth: '500px',
+          padding: '16px 20px',
+          border: '1px solid rgba(255, 255, 255, 0.05)',
+          borderRadius: '8px',
+          background: 'rgba(0, 0, 0, 0.4)'
+        }}>
+          <p style={{
+            fontFamily: 'var(--font-mono)',
+            fontSize: '0.8rem',
+            color: 'var(--color-cyber)',
+            textAlign: 'left',
+            margin: 0
+          }}>
+            {auditLog}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div id="app-container">
       {/* Toast notifications */}
@@ -1022,15 +1432,48 @@ function App() {
           </div>
         </nav>
 
-        <div className="sidebar-footer">
-          <div className="user-avatar">PD</div>
-          <div className="user-info">
-            <span className="user-name">Paramita Das</span>
-            <span className="user-status">
-              <span className="live-dot"></span>
-              Cortex Active
-            </span>
+        <div className="sidebar-footer" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', overflow: 'hidden' }}>
+            <div className="user-avatar" style={{
+              background: presenceStatus === 'Active' ? 'var(--color-success)' : presenceStatus === 'Busy' ? 'var(--color-warning)' : 'var(--color-error)',
+              color: '#000',
+              fontWeight: 700,
+              boxShadow: '0 0 10px ' + (presenceStatus === 'Active' ? 'rgba(16, 185, 129, 0.4)' : presenceStatus === 'Busy' ? 'rgba(245, 158, 11, 0.4)' : 'rgba(244, 63, 94, 0.4)')
+            }}>
+              {(session?.user?.name || session?.user?.email || 'PD').substring(0, 2).toUpperCase()}
+            </div>
+            <div className="user-info" style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              <span className="user-name" style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', display: 'block' }}>
+                {session?.user?.name || session?.user?.email?.split('@')[0]}
+              </span>
+              <span className="user-status" style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <span className="live-dot" style={{
+                  background: presenceStatus === 'Active' ? 'var(--color-success)' : presenceStatus === 'Busy' ? 'var(--color-warning)' : 'var(--color-error)'
+                }}></span>
+                {presenceStatus === 'Active' ? 'Active' : presenceStatus === 'Busy' ? 'Busy' : 'Leave'}
+              </span>
+            </div>
           </div>
+          <button 
+            onClick={handleSignOut}
+            style={{
+              background: 'none',
+              border: 'none',
+              color: 'var(--text-secondary)',
+              cursor: 'pointer',
+              padding: '6px',
+              borderRadius: '6px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              transition: 'all 0.2s'
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.color = 'var(--color-error)'}
+            onMouseLeave={(e) => e.currentTarget.style.color = 'var(--text-secondary)'}
+            title="Sign Out of Corporate Workspace"
+          >
+            <LogOut size={16} />
+          </button>
         </div>
       </aside>
 
@@ -1236,37 +1679,203 @@ function App() {
                     </div>
                   </div>
 
-                  {/* MINI QUICK INTEGRATIONS OVERVIEW */}
+                  {/* COGNITIVE PRESENCE & AUTO-REPLY SANDBOX */}
                   <div className="glass-panel" style={{ padding: '20px' }}>
-                    <h3 className="card-title" style={{ fontSize: '1rem', marginBottom: '12px' }}>
-                      Workspace Sync
-                    </h3>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                      {Object.entries(integrations).map(([app, isConnected]) => (
-                        <div key={app} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.8rem' }}>
-                          <span style={{ textTransform: 'capitalize', fontWeight: 500 }}>{app}</span>
-                          <span style={{
-                            color: isConnected ? 'var(--color-success)' : 'var(--text-muted)',
-                            fontWeight: 600,
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '4px'
-                          }}>
-                            <span style={{
-                              width: '6px',
-                              height: '6px',
-                              borderRadius: '50%',
-                              background: isConnected ? 'var(--color-success)' : 'var(--text-muted)',
-                              display: 'inline-block'
-                            }} />
-                            {isConnected ? 'Syncing' : 'Disconnected'}
-                          </span>
-                        </div>
-                      ))}
+                    <div className="card-title-container" style={{ marginBottom: '12px' }}>
+                      <h3 className="card-title" style={{ fontSize: '1rem' }}>
+                        <Users size={16} color="var(--color-accent)" />
+                        Presence & Auto-Reply Console
+                      </h3>
+                      <span className={`badge ${presenceStatus === 'Active' ? 'badge-success' : presenceStatus === 'Busy' ? 'badge-warning' : 'badge-error'}`} style={{ fontSize: '0.65rem' }}>
+                        {presenceStatus}
+                      </span>
                     </div>
-                    <button className="btn btn-secondary" style={{ width: '100%', marginTop: '14px', padding: '6px', fontSize: '0.75rem' }} onClick={() => setActiveTab('integrations')}>
-                      Manage Apps
-                    </button>
+
+                    <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '14px' }}>
+                      Select your availability. In **Busy** or **On Leave** mode, Cortex intercepts incoming chats and auto-replies instantly.
+                    </p>
+
+                    {/* Status Toggle Grid */}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px', marginBottom: '16px' }}>
+                      <button 
+                        onClick={() => setPresenceStatus('Active')}
+                        style={{
+                          padding: '8px',
+                          borderRadius: '6px',
+                          border: '1px solid ' + (presenceStatus === 'Active' ? 'var(--color-success)' : 'rgba(255,255,255,0.05)'),
+                          background: presenceStatus === 'Active' ? 'rgba(16, 185, 129, 0.08)' : 'rgba(0,0,0,0.15)',
+                          color: presenceStatus === 'Active' ? '#10b981' : 'var(--text-secondary)',
+                          fontSize: '0.75rem',
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '4px'
+                        }}
+                      >
+                        <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#10b981' }} />
+                        Active
+                      </button>
+
+                      <button 
+                        onClick={() => setPresenceStatus('Busy')}
+                        style={{
+                          padding: '8px',
+                          borderRadius: '6px',
+                          border: '1px solid ' + (presenceStatus === 'Busy' ? 'var(--color-warning)' : 'rgba(255,255,255,0.05)'),
+                          background: presenceStatus === 'Busy' ? 'rgba(245, 158, 11, 0.08)' : 'rgba(0,0,0,0.15)',
+                          color: presenceStatus === 'Busy' ? '#f59e0b' : 'var(--text-secondary)',
+                          fontSize: '0.75rem',
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '4px'
+                        }}
+                      >
+                        <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#f59e0b' }} />
+                        Busy
+                      </button>
+
+                      <button 
+                        onClick={() => setPresenceStatus('On Leave')}
+                        style={{
+                          padding: '8px',
+                          borderRadius: '6px',
+                          border: '1px solid ' + (presenceStatus === 'On Leave' ? 'var(--color-error)' : 'rgba(255,255,255,0.05)'),
+                          background: presenceStatus === 'On Leave' ? 'rgba(244, 63, 94, 0.08)' : 'rgba(0,0,0,0.15)',
+                          color: presenceStatus === 'On Leave' ? '#f43f5e' : 'var(--text-secondary)',
+                          fontSize: '0.75rem',
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '4px'
+                        }}
+                      >
+                        <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#f43f5e' }} />
+                        Leave
+                      </button>
+                    </div>
+
+                    {/* Auto-reply Message Customizer */}
+                    <div className="glass-panel" style={{ padding: '12px', background: 'rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.03)', borderRadius: '8px', marginBottom: '16px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                        <span style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--text-secondary)' }}>Auto-Reply Template</span>
+                        <button 
+                          onClick={() => setIsEditingAutoReply(!isEditingAutoReply)}
+                          style={{ background: 'none', border: 'none', color: 'var(--color-primary)', fontSize: '0.7rem', fontWeight: 600, cursor: 'pointer' }}
+                        >
+                          {isEditingAutoReply ? 'Save' : 'Edit'}
+                        </button>
+                      </div>
+
+                      {isEditingAutoReply ? (
+                        <textarea 
+                          value={autoReplyMessage}
+                          onChange={(e) => setAutoReplyMessage(e.target.value)}
+                          style={{
+                            width: '100%',
+                            height: '50px',
+                            background: '#030712',
+                            border: '1px solid rgba(255,255,255,0.15)',
+                            borderRadius: '4px',
+                            color: '#fff',
+                            fontSize: '0.75rem',
+                            padding: '6px',
+                            fontFamily: 'inherit',
+                            resize: 'none'
+                          }}
+                        />
+                      ) : (
+                        <p style={{ fontSize: '0.7rem', color: 'var(--text-muted)', margin: 0, fontStyle: 'italic', lineHeight: 1.4 }}>
+                          "{autoReplyMessage}"
+                        </p>
+                      )}
+                    </div>
+
+                    {/* INTERACTIVE CHAT SIMULATION SANDBOX */}
+                    <div style={{ borderTop: '1px solid var(--border-light)', paddingTop: '14px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                        <h4 style={{ fontSize: '0.8rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <MessageCircle size={14} color="var(--color-primary)" />
+                          Live Chat Auto-Reply Simulator
+                        </h4>
+                        <button 
+                          onClick={triggerIncomingMessageSimulation}
+                          disabled={isSimulatingMessage}
+                          className="btn btn-secondary"
+                          style={{ padding: '3px 8px', fontSize: '0.65rem' }}
+                        >
+                          {isSimulatingMessage ? 'Typing...' : 'Trigger Incoming Msg'}
+                        </button>
+                      </div>
+
+                      {/* Chat Messages Scrolling Feed */}
+                      <div style={{
+                        height: '110px',
+                        overflowY: 'auto',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '8px',
+                        background: 'rgba(0,0,0,0.25)',
+                        border: '1px solid rgba(255,255,255,0.02)',
+                        borderRadius: '8px',
+                        padding: '10px',
+                        marginBottom: '10px'
+                      }}>
+                        {chatMessages.map(msg => (
+                          <div key={msg.id} style={{
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: msg.type === 'outgoing' ? 'flex-end' : 'flex-start',
+                            maxWidth: '100%'
+                          }}>
+                            <div style={{ display: 'flex', gap: '6px', fontSize: '0.65rem', color: 'var(--text-muted)', marginBottom: '2px' }}>
+                              <span>{msg.sender}</span>
+                              <span>•</span>
+                              <span>{msg.time}</span>
+                              {msg.isAutoReply && (
+                                <span style={{ color: 'var(--color-primary)', fontWeight: 700, fontSize: '0.6rem', textTransform: 'uppercase' }}>[Auto-Reply]</span>
+                              )}
+                            </div>
+                            <div style={{
+                              padding: '6px 10px',
+                              borderRadius: '8px',
+                              background: msg.type === 'outgoing' 
+                                ? msg.isAutoReply ? 'rgba(168, 85, 247, 0.15)' : 'rgba(99, 102, 241, 0.2)' 
+                                : 'rgba(255,255,255,0.05)',
+                              border: msg.isAutoReply ? '1px solid rgba(168, 85, 247, 0.3)' : '1px solid rgba(255,255,255,0.02)',
+                              color: '#f8fafc',
+                              fontSize: '0.72rem',
+                              maxWidth: '85%',
+                              wordBreak: 'break-word',
+                              lineHeight: 1.3
+                            }}>
+                              {msg.text}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Chat input form */}
+                      <form onSubmit={handleSendManualChat} style={{ display: 'flex', gap: '6px' }}>
+                        <input 
+                          type="text"
+                          className="search-input"
+                          placeholder="Type Slack message reply..."
+                          value={chatInput}
+                          onChange={(e) => setChatInput(e.target.value)}
+                          style={{ flex: 1, fontSize: '0.75rem', padding: '6px 10px', background: 'rgba(0,0,0,0.15)' }}
+                        />
+                        <button type="submit" className="btn btn-cyber" style={{ padding: '6px 10px' }}>
+                          <Send size={12} />
+                        </button>
+                      </form>
+                    </div>
                   </div>
 
                 </div>
